@@ -24,11 +24,24 @@ const io = new Server(httpServer, {
 app.post("/streams", async (req, res) => {
   try {
     const id = uuid();
-    await pool.query("INSERT INTO streams (id) VALUES ($1)", [id]);
-    res.json({ streamId: id });
+    console.log("Creating stream with ID:", id);
+    
+    // Check database connection
+    const client = await pool.connect();
+    try {
+      await client.query("INSERT INTO streams (id) VALUES ($1)", [id]);
+      console.log("Stream created successfully:", id);
+      res.json({ streamId: id });
+    } finally {
+      client.release();
+    }
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to create stream" });
+    console.error("Error creating stream:", err);
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ 
+      error: "Failed to create stream",
+      details: process.env.NODE_ENV === "development" ? errorMessage : undefined
+    });
   }
 });
 
@@ -42,7 +55,7 @@ app.get("/streams/:id", async (req, res) => {
     }
     res.json({ exists: true });
   } catch (err) {
-    console.error(err);
+    console.error("Error checking stream:", err);
     res.status(500).json({ error: "Failed to check stream" });
   }
 });
@@ -59,20 +72,24 @@ io.on("connection", (socket) => {
 
   // WebRTC signaling messages
   socket.on("signal", ({ streamId, data }: { streamId: string; data: any }) => {
-    // Send to everyone else in the same room
-    socket.to(streamId).emit("signal", {
-      from: socket.id,
-      data,
-    });
+    try {
+      console.log(`Signal from ${socket.id} in stream ${streamId}`);
+      // Send to everyone else in the same room (excluding sender)
+      socket.to(streamId).emit("signal", { data });
+    } catch (err) {
+      console.error("Error handling signal:", err);
+    }
   });
 
   // Chat messages
-  socket.on("chat", ({ streamId, message }: { streamId: string; message: string }) => {
-    // Broadcast to everyone in the same room
-    io.to(streamId).emit("chat", {
-      from: socket.id,
-      message,
-    });
+  socket.on("chat", ({ streamId, message }: { streamId: string; message: { text: string; nickname: string; createdAt: string } }) => {
+    try {
+      console.log(`Chat message from ${socket.id} in stream ${streamId}:`, message.text);
+      // Broadcast to everyone in the same room (including sender)
+      io.to(streamId).emit("chat", message);
+    } catch (err) {
+      console.error("Error handling chat message:", err);
+    }
   });
 
   socket.on("disconnect", () => {
@@ -80,9 +97,34 @@ io.on("connection", (socket) => {
   });
 });
 
+// Initialize database - ensure streams table exists
+async function initializeDatabase() {
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS streams (
+          id UUID PRIMARY KEY
+        )
+      `);
+      console.log("Database initialized: streams table ready");
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error("Failed to initialize database:", err);
+    throw err;
+  }
+}
+
 const PORT = process.env.PORT || 4000;
 httpServer.listen(PORT, async () => {
   console.log(`Server listening on port ${PORT}`);
-  await pool.connect();
-  console.log("Connected to Postgres");
+  try {
+    await initializeDatabase();
+    console.log("Connected to Postgres");
+  } catch (err) {
+    console.error("Database initialization failed. Please check your DATABASE_URL and ensure PostgreSQL is running.");
+    process.exit(1);
+  }
 });
