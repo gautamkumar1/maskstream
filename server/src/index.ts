@@ -66,16 +66,47 @@ io.on("connection", (socket) => {
 
   // Join a room for a particular stream
   socket.on("join-stream", (streamId: string) => {
-    socket.join(streamId);
-    console.log(`Socket ${socket.id} joined stream ${streamId}`);
+    // Normalize streamId: decode URL encoding and trim whitespace
+    let normalizedStreamId: string;
+    try {
+      normalizedStreamId = decodeURIComponent(streamId).trim();
+      // Extract just the UUID part if there's additional text
+      const uuidMatch = normalizedStreamId.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+      if (uuidMatch) {
+        normalizedStreamId = uuidMatch[0];
+      }
+    } catch {
+      // If decoding fails, use the streamId as-is (might already be decoded)
+      normalizedStreamId = streamId.trim();
+      // Try to extract UUID from raw ID as well
+      const uuidMatch = normalizedStreamId.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+      if (uuidMatch) {
+        normalizedStreamId = uuidMatch[0];
+      }
+    }
+    socket.join(normalizedStreamId);
+    console.log(`Socket ${socket.id} joined stream ${normalizedStreamId} (original: ${streamId})`);
   });
 
   // WebRTC signaling messages
   socket.on("signal", ({ streamId, data }: { streamId: string; data: any }) => {
     try {
-      console.log(`Signal from ${socket.id} in stream ${streamId}`);
+      // Normalize streamId: decode URL encoding and trim whitespace
+      let normalizedStreamId: string;
+      try {
+        normalizedStreamId = decodeURIComponent(streamId).trim();
+        // Extract just the UUID part if there's additional text
+        const uuidMatch = normalizedStreamId.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+        if (uuidMatch) {
+          normalizedStreamId = uuidMatch[0];
+        }
+      } catch {
+        // If decoding fails, use the streamId as-is (might already be decoded)
+        normalizedStreamId = streamId.trim();
+      }
+      console.log(`Signal from ${socket.id} in stream ${normalizedStreamId}`);
       // Send to everyone else in the same room (excluding sender)
-      socket.to(streamId).emit("signal", { data });
+      socket.to(normalizedStreamId).emit("signal", { data });
     } catch (err) {
       console.error("Error handling signal:", err);
     }
@@ -84,9 +115,32 @@ io.on("connection", (socket) => {
   // Chat messages
   socket.on("chat", ({ streamId, message }: { streamId: string; message: { text: string; nickname: string; createdAt: string } }) => {
     try {
-      console.log(`Chat message from ${socket.id} in stream ${streamId}:`, message.text);
+      // Normalize streamId: decode URL encoding and trim whitespace
+      let normalizedStreamId: string;
+      try {
+        normalizedStreamId = decodeURIComponent(streamId).trim();
+        // Extract just the UUID part if there's additional text
+        const uuidMatch = normalizedStreamId.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+        if (uuidMatch) {
+          normalizedStreamId = uuidMatch[0];
+        }
+      } catch {
+        // If decoding fails, use the streamId as-is (might already be decoded)
+        normalizedStreamId = streamId.trim();
+        // Try to extract UUID from raw ID as well
+        const uuidMatch = normalizedStreamId.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+        if (uuidMatch) {
+          normalizedStreamId = uuidMatch[0];
+        }
+      }
+      console.log(`Chat message from ${socket.id} in stream ${normalizedStreamId} (original: ${streamId}):`, message.text);
+      // Ensure socket is in the room before broadcasting
+      if (!socket.rooms.has(normalizedStreamId)) {
+        socket.join(normalizedStreamId);
+        console.log(`Socket ${socket.id} joined stream ${normalizedStreamId} via chat message`);
+      }
       // Broadcast to everyone in the same room (including sender)
-      io.to(streamId).emit("chat", message);
+      io.to(normalizedStreamId).emit("chat", message);
     } catch (err) {
       console.error("Error handling chat message:", err);
     }
