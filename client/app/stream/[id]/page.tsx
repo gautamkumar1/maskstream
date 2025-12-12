@@ -50,20 +50,33 @@ export default function StreamPage() {
 
   // 1. Connect socket and join room
   useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:53',message:'Initializing socket connection',data:{streamId, isHost},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
+    
     const s = io(SOCKET_URL, { transports: ["websocket"] });
     setSocket(s);
 
     s.on("connect", () => {
       console.log("Socket connected:", s.id);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:59',message:'Socket connected',data:{socketId: s.id, streamId, isHost},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
       s.emit("join-stream", streamId);
     });
 
     s.on("connect_error", (err) => {
       console.error("Socket connection error:", err);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:64',message:'Socket connection error',data:{streamId, error: err instanceof Error ? err.message : 'Unknown error'},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
     });
 
     s.on("disconnect", (reason) => {
       console.log("Socket disconnected:", reason);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:69',message:'Socket disconnected',data:{streamId, reason},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
     });
 
     // Receive chat
@@ -91,32 +104,56 @@ export default function StreamPage() {
         if (isHost) {
           // HOST: get camera + create initiator peer
           console.log("Setting up host peer...");
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:91',message:'Setting up host peer',data:{streamId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
+          // #endregion
+          
           const stream = await navigator.mediaDevices.getUserMedia({
             video: true,
             audio: true,
           });
           currentStream = stream;
+          
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:100',message:'Got user media',data:{streamId, videoTracks: stream.getVideoTracks().length, audioTracks: stream.getAudioTracks().length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
+          // #endregion
 
           if (localVideoRef.current) {
             localVideoRef.current.srcObject = stream;
           }
 
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:107',message:'Creating host peer with default STUN/TURN config',data:{streamId, hasConfig: false},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
+          // #endregion
+          
           const p = new Peer({
             initiator: true,
             trickle: false,
             stream,
+            config: {
+              iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:global.stun.twilio.com:3478' }
+              ]
+            }
           });
           currentPeer = p;
 
           // When peer has signaling data, send via socket to viewers
           p.on("signal", (data) => {
             console.log("Host sending signal data");
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:115',message:'Host sending signal',data:{streamId, signalType: data.type, candidate: data.candidate},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             currentSocket.emit("signal", { streamId, data });
           });
 
           // When we receive remote stream (viewer cam if you ever do that)
           p.on("stream", (remoteStream) => {
             console.log("Host received remote stream");
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:123',message:'Host received remote stream',data:{streamId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
+            // #endregion
             if (remoteVideoRef.current) {
               remoteVideoRef.current.srcObject = remoteStream;
             }
@@ -124,36 +161,90 @@ export default function StreamPage() {
 
           p.on("error", (err) => {
             console.error("Host peer error:", err);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:130',message:'Host peer error',data:{streamId, error: err instanceof Error ? err.message : 'Unknown error'},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
+            // #endregion
           });
 
           p.on("connect", () => {
             console.log("Host peer connected");
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:135',message:'Host peer connected',data:{streamId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
+            // #endregion
           });
 
+          // Track if host is already processing an answer
+          let isProcessingAnswer = false;
+          
           // Listen to incoming signals (from viewer)
           signalHandler = ({ data }: { data: Peer.SignalData }) => {
             console.log("Host received signal from viewer");
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:141',message:'Host received viewer signal',data:{streamId, signalType: data.type},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
+            
+            // Only process answers if not already processing one
+            if (data.type === 'answer' && isProcessingAnswer) {
+              console.log("Ignoring duplicate answer");
+              return;
+            }
+            
+            if (data.type === 'answer') {
+              isProcessingAnswer = true;
+            }
+            
             p.signal(data);
           };
           currentSocket.on("signal", signalHandler);
+          
+          // Listen for new viewers joining
+          currentSocket.on("viewer-joined", ({ viewerId }) => {
+            console.log("New viewer joined:", viewerId);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:148',message:'Host notified of new viewer',data:{streamId, viewerId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
+            
+            // Reset answer processing flag for new viewer
+            isProcessingAnswer = false;
+          });
 
           setPeer(p);
         } else {
           // VIEWER: no need to capture camera, just receive
           console.log("Setting up viewer peer...");
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:144',message:'Setting up viewer peer',data:{streamId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
+          // #endregion
+          
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:147',message:'Creating viewer peer with default STUN/TURN config',data:{streamId, hasConfig: false},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
+          // #endregion
+          
           const p = new Peer({
             initiator: false,
             trickle: false,
+            config: {
+              iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:global.stun.twilio.com:3478' }
+              ]
+            }
           });
           currentPeer = p;
 
           p.on("signal", (data) => {
             console.log("Viewer sending signal data");
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:155',message:'Viewer sending signal',data:{streamId, signalType: data.type},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             currentSocket.emit("signal", { streamId, data });
           });
 
           p.on("stream", (remoteStream) => {
             console.log("Viewer received remote stream");
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:162',message:'Viewer received remote stream',data:{streamId, videoTracks: remoteStream.getVideoTracks().length, audioTracks: remoteStream.getAudioTracks().length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
+            // #endregion
             if (remoteVideoRef.current) {
               remoteVideoRef.current.srcObject = remoteStream;
             }
@@ -161,17 +252,39 @@ export default function StreamPage() {
 
           p.on("error", (err) => {
             console.error("Viewer peer error:", err);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:169',message:'Viewer peer error',data:{streamId, error: err instanceof Error ? err.message : 'Unknown error'},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
+            // #endregion
           });
 
           p.on("connect", () => {
             console.log("Viewer peer connected");
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:174',message:'Viewer peer connected',data:{streamId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
+            // #endregion
           });
 
           signalHandler = ({ data }: { data: Peer.SignalData }) => {
             console.log("Viewer received signal from host");
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:180',message:'Viewer received host signal',data:{streamId, signalType: data.type},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             p.signal(data);
           };
+          
+          // Attach signal handler immediately
           currentSocket.on("signal", signalHandler);
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:186',message:'Viewer signal handler attached',data:{streamId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
+          
+          // Request latest offer from server after a short delay to ensure peer is ready
+          setTimeout(() => {
+            currentSocket.emit("request-offer", { streamId });
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client/stream/[id]/page.tsx:193',message:'Viewer requested offer from server',data:{streamId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
+          }, 200);
 
           setPeer(p);
         }

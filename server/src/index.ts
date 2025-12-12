@@ -60,9 +60,16 @@ app.get("/streams/:id", async (req, res) => {
   }
 });
 
+// Store the latest offer for each stream
+const streamOffers = new Map<string, any>();
+
 // --- Socket.io events for signaling + chat ---
 io.on("connection", (socket) => {
   console.log("New socket connected:", socket.id);
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/index.ts:71',message:'New socket connected',data:{socketId: socket.id},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
 
   // Join a room for a particular stream
   socket.on("join-stream", (streamId: string) => {
@@ -84,8 +91,41 @@ io.on("connection", (socket) => {
         normalizedStreamId = uuidMatch[0];
       }
     }
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/index.ts:87',message:'Joining stream room',data:{socketId: socket.id, originalStreamId: streamId, normalizedStreamId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
+    
     socket.join(normalizedStreamId);
     console.log(`Socket ${socket.id} joined stream ${normalizedStreamId} (original: ${streamId})`);
+    
+    // Check if there's already a host in this room
+    const socketsInRoom = io.sockets.adapter.rooms.get(normalizedStreamId);
+    const socketCount = socketsInRoom ? socketsInRoom.size : 0;
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/index.ts:98',message:'Successfully joined stream room',data:{socketId: socket.id, normalizedStreamId, socketCount},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    
+    // Check if this is a viewer joining after a host is already in the room
+    if (socketCount > 1) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/index.ts:103',message:'Viewer joining existing stream',data:{socketId: socket.id, normalizedStreamId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      
+      // Check if there's a stored offer for this stream
+      const storedOffer = streamOffers.get(normalizedStreamId);
+      if (storedOffer) {
+        // Send the stored offer to the new viewer
+        socket.emit("signal", { data: storedOffer });
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/index.ts:109',message:'Sent stored offer to new viewer',data:{socketId: socket.id, normalizedStreamId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+      }
+      
+      // Notify existing host that a new viewer has joined
+      socket.to(normalizedStreamId).emit("viewer-joined", { viewerId: socket.id });
+    }
   });
 
   // WebRTC signaling messages
@@ -104,11 +144,63 @@ io.on("connection", (socket) => {
         // If decoding fails, use the streamId as-is (might already be decoded)
         normalizedStreamId = streamId.trim();
       }
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/index.ts:115',message:'Received signal',data:{socketId: socket.id, originalStreamId: streamId, normalizedStreamId, signalType: data.type},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      
+      // Store the latest offer from the host
+      if (data.type === "offer") {
+        streamOffers.set(normalizedStreamId, data);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/index.ts:121',message:'Stored offer signal for stream',data:{socketId: socket.id, normalizedStreamId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+      }
+      
       console.log(`Signal from ${socket.id} in stream ${normalizedStreamId}`);
       // Send to everyone else in the same room (excluding sender)
       socket.to(normalizedStreamId).emit("signal", { data });
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/index.ts:127',message:'Relayed signal to room',data:{socketId: socket.id, normalizedStreamId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
     } catch (err) {
       console.error("Error handling signal:", err);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/index.ts:131',message:'Error handling signal',data:{socketId: socket.id, error: err instanceof Error ? err.message : 'Unknown error'},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+    }
+  });
+
+  // Handle offer request from viewer
+  socket.on("request-offer", ({ streamId }: { streamId: string }) => {
+    // Normalize streamId: decode URL encoding and trim whitespace
+    let normalizedStreamId: string;
+    try {
+      normalizedStreamId = decodeURIComponent(streamId).trim();
+      // Extract just the UUID part if there's additional text
+      const uuidMatch = normalizedStreamId.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+      if (uuidMatch) {
+        normalizedStreamId = uuidMatch[0];
+      }
+    } catch {
+      // If decoding fails, use the streamId as-is (might already be decoded)
+      normalizedStreamId = streamId.trim();
+      // Try to extract UUID from raw ID as well
+      const uuidMatch = normalizedStreamId.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+      if (uuidMatch) {
+        normalizedStreamId = uuidMatch[0];
+      }
+    }
+    
+    // Check if there's a stored offer for this stream
+    const storedOffer = streamOffers.get(normalizedStreamId);
+    if (storedOffer) {
+      // Send stored offer to requesting viewer
+      socket.emit("signal", { data: storedOffer });
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5f680115-6a97-4a14-b858-6f5da8c067df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/index.ts:165',message:'Sent stored offer on request',data:{socketId: socket.id, normalizedStreamId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
     }
   });
 
